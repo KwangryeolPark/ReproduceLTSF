@@ -42,11 +42,11 @@ def get_model_info():
         })
 
     # Sort models by year and name
-    models.sort(key=lambda x: (x["year"], x["name"]))
+    models.sort(key=lambda x: (x["year"], x["conference"], x["name"]))
 
     # Make the year a string for consistent formatting
     for model in models:
-        model["year"] = str(model["year"])
+        model["year"] = str(model["year"])    
 
     return models, sorted(datasets_set)
 
