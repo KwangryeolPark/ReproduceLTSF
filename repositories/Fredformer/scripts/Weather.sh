@@ -27,7 +27,7 @@ do
         336) cf_dim=16 cf_depth=3 cf_heads=8 cf_mlp=32 cf_head_dim=8 d_model=4;;
         720) cf_dim=16 cf_depth=3 cf_heads=8 cf_mlp=32 cf_head_dim=8 d_model=4;;
     esac
-    python -u run_longExp.py \
+    python -u run.py \
       --random_seed $random_seed \
       --is_training 1 \
       --root_path $root_path_name \
