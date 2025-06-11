@@ -270,7 +270,7 @@ class Exp_Main(Exp_Basic):
             
         try:
             import yaml
-            args = vars(args)
+            args = vars(self.args)
             
             device_name = torch.cuda.get_device_name(self.device) if self.args.use_gpu else 'cpu'
             args['device_name'] = device_name
