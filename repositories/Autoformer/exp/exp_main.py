@@ -5,7 +5,7 @@ logging.basicConfig(format='%(asctime)s,%(msecs)03d %(levelname)-8s [%(filename)
 
 from data_provider.data_factory import data_provider
 from exp.exp_basic import Exp_Basic
-from models import Informer, Autoformer, Transformer, Reformer
+from models import Autoformer
 from utils.tools import EarlyStopping, adjust_learning_rate, visual
 from utils.metrics import metric
 
@@ -30,9 +30,6 @@ class Exp_Main(Exp_Basic):
     def _build_model(self):
         model_dict = {
             'Autoformer': Autoformer,
-            'Transformer': Transformer,
-            'Informer': Informer,
-            'Reformer': Reformer,
         }
         model = model_dict[self.args.model].Model(self.args).float()
 
@@ -202,8 +199,8 @@ class Exp_Main(Exp_Basic):
                 outputs = outputs.detach().cpu().numpy()
                 batch_y = batch_y.detach().cpu().numpy()
 
-                pred = outputs.detach().cpu().numpy()  # .squeeze()
-                true = batch_y.detach().cpu().numpy()  # .squeeze()
+                pred = outputs # .detach().cpu().numpy()  # .squeeze()
+                true = batch_y # .detach().cpu().numpy()  # .squeeze()
 
                 preds.append(pred)
                 trues.append(true)
