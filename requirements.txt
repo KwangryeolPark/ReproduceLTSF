@@ -1,0 +1,16 @@
+einops
+torch<2.5.0
+matplotlib
+numpy<2.0.0
+pandas
+reformer-pytorch
+scikit-learn
+scipy
+sktime
+tqdm
+ipykernel
+ipywidgets
+pyyaml
+openpyxl
+torchinfo
+thop
