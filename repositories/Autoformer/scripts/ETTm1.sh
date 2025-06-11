@@ -16,9 +16,9 @@ seq_len=96
 model_name=Autoformer
 
 root_path_name=./dataset/ETT-small/
-data_path_name=ETTh1.csv
-model_id_name=ETTh1
-data_name=ETTh1
+data_path_name=ETTm1.csv
+model_id_name=ETTm1
+data_name=ETTm1
 
 random_seed=2021
 for pred_len in 24 48 96 288 672
