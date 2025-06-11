@@ -3,7 +3,7 @@ import argparse
 import yaml
 
 parser = argparse.ArgumentParser(description="Clone Git repositories and save metadata.")
-parser.add_argument("--repo_dir", type=str, help="Directory to clone repositories into", required=True)
+parser.add_argument("--repo_dir", type=str, help="Git repository URL ending with `.git`", required=True)
 parser.add_argument("--conference", type=str, help="Conference name", required=True)
 parser.add_argument("--year", type=int, help="Year of the conference", required=True)
 parser.add_argument("--model_name", type=str, help="Model name", default=None)
@@ -17,18 +17,25 @@ year = args.year
 if conference == 'NIPS':
     conference = 'NeurIPS'
 
+repo_model_name = repo_dir.split('/')[-1]
 if args.model_name == None:
-    model_name = repo_dir.split('/')[-1]
+    model_name = repo_model_name
+else:
+    model_name = args.model_name
 
 if not os.path.exists('repositories'):
     os.makedirs('repositories')
 
 # Model Path
-model_path = os.path.join('repositories', model_name)
+model_path = os.path.join('repositories', repo_model_name) if args.model_name == None else os.path.join('repositories', model_name)
    
 # Clone the repository if it does not exist
 if not os.path.exists(model_path):
-    os.system(f"cd repositories && git clone {clone_repo_dir}")
+    if args.model_name == None:
+        os.system(f"cd repositories && git clone {clone_repo_dir}")
+    else:
+        os.system(f"cd repositories && git clone {clone_repo_dir} && mv {repo_model_name} {model_name}")
+        
     
 # Remove files and folders that are not needed
 remove_list = ['.git', '.gitignore', 'README.md', 'requirements.txt', 'venv', 'dataset', 'logs', 'checkpoints', 'results', 'test_results']
