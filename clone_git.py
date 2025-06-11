@@ -26,9 +26,19 @@ if not os.path.exists('repositories'):
 # Model Path
 model_path = os.path.join('repositories', model_name)
    
+# Clone the repository if it does not exist
 if not os.path.exists(model_path):
     os.system(f"cd repositories && git clone {clone_repo_dir}")
- 
+    
+# Remove files and folders that are not needed
+remove_list = ['.git', '.gitignore', 'README.md', 'requirements.txt', 'venv', 'dataset', 'logs', 'checkpoints', 'results', 'test_results']
+for item in remove_list:
+    item_path = os.path.join(model_path, item)
+    if os.path.exists(item_path):
+        if os.path.isdir(item_path):
+            os.system(f"rm -rf {item_path}")
+        else:
+            os.remove(item_path)
  
 # Save metadata
 metadata = {
@@ -76,3 +86,4 @@ readme_path = os.path.join(model_path, 'README.md')
 with open(readme_path, 'w') as f:
     f.write(f"# Important\n")
     f.write(f"* This repository is the clone version of {repo_dir}\n")
+    
