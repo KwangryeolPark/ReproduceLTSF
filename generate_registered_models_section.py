@@ -1,5 +1,7 @@
 import os
 import re
+import yaml
+import pandas as pd
 
 REPO_ROOT = os.path.dirname(os.path.abspath(__file__))
 REPO_DIR = os.path.join(REPO_ROOT, "repositories")
@@ -21,34 +23,64 @@ def get_model_info():
                 dataset = fname[:-3]
                 datasets.append(dataset)
                 datasets_set.add(dataset)
-        # URL 추출
-        url = None
-        orig_html = os.path.join(model_path, "original.html")
-        if os.path.isfile(orig_html):
-            with open(orig_html, encoding="utf-8") as f:
-                url = f.read()
+        # Meta 정보 추출
+        meta_file = os.path.join(model_path, "metadata.yaml")
+        metadata = {}
+        if os.path.isfile(meta_file):
+            with open(meta_file, encoding="utf-8") as f:
+                metadata = yaml.safe_load(f)
+        conference = metadata.get("conference", "Unknown")
+        url = metadata.get("repo_dir", "#")
+        year = metadata.get("year", "Unknown")
+        
         models.append({
             "name": model_name,
             "datasets": set(datasets),
-            "url": url or "#"
+            "url": url,
+            "conference": conference,
+            "year": year
         })
+
+    # Sort models by year and name
+    models.sort(key=lambda x: (x["year"], x["name"]))
+
+    # Make the year a string for consistent formatting
+    for model in models:
+        model["year"] = str(model["year"])
+
     return models, sorted(datasets_set)
 
 def make_markdown_table(models, datasets):
-    header = ["Model"] + datasets
+    header = ["Model"] + ["Conference"] + ["Year"] + datasets
     lines = []
-    # 헤더
+    # 모델 개수 표기
+    lines.append(f"**# of models: {len(models)}**\n")
     lines.append("| " + " | ".join(header) + " |")
     lines.append("|" + "|".join(["-"*len(h) for h in header]) + "|")
-    # 각 모델
     for m in models:
         url = m["url"]
         name = m["name"]
         row = [f'<a href="{url}">{name}</a>']
+        row.append(m["conference"])
+        row.append(m["year"])
         for d in datasets:
             row.append(":white_check_mark:" if d in m["datasets"] else ":x:")
         lines.append("|" + " | ".join(row) + "|")
     return "\n".join(lines)
+
+def make_dataframe(models, datasets):
+    rows = []
+    for m in models:
+        row = {
+            "Model": m["name"],
+            "Conference": m["conference"],
+            "Year": m["year"],
+        }
+        for d in datasets:
+            row[d] = "O" if d in m["datasets"] else "X"
+        rows.append(row)
+    df = pd.DataFrame(rows)
+    return df
 
 def update_readme(table_md):
     with open(README_PATH, encoding="utf-8") as f:
@@ -67,3 +99,8 @@ if __name__ == "__main__":
     table_md = make_markdown_table(models, datasets)
     update_readme(table_md)
     print("README.md Registered Models section updated.")
+
+    # Summary
+    df = make_dataframe(models, datasets)
+    print(f"\n[Registered Models Summary] ({len(models)} Models)")
+    print(df)

@@ -1,4 +1,6 @@
 *.pth
+.vscode
+test_results
 dataset/**
 !dataset/.gitkeep
 venv/

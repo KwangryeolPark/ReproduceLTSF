@@ -21,7 +21,7 @@ data_path_name=ETTm1.csv
 model_id_name=ETTm1
 data_name=ETTm1
 
-random_seed=2021.
+random_seed=2021
 
 for pred_len in 96 192 336 720
 do

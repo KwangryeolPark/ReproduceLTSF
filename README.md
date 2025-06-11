@@ -7,8 +7,11 @@ This repository collects the Git repositories of Long-term Time Series Forecasti
 <!--  Registered Models begin-->
 # Registered Models
 
-| Model | ECL | ETTh1 | ETTh2 | ETTm1 | ETTm2 | Solar | Traffic | Weather |
-|-----|---|-----|-----|-----|-----|-----|-------|-------|
-|<a href="https://github.com/chenzRG/Fredformer">Fredformer</a> | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark:|
+**# of models: 2**
+
+| Model | Conference | Year | ECL | ETTh1 | ETTh2 | ETTm1 | ETTm2 | Exchange | ILI | Solar | Traffic | Weather |
+|-----|----------|----|---|-----|-----|-----|-----|--------|---|-----|-------|-------|
+|<a href="https://github.com/thuml/Autoformer">Autoformer</a> | NeurIPS | 2021 | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :x: | :white_check_mark: | :white_check_mark:|
+|<a href="https://github.com/chenzRG/Fredformer">Fredformer</a> | KDD | 2024 | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :x: | :x: | :white_check_mark: | :white_check_mark: | :white_check_mark:|
 
 <!--  Registered Models end-->
