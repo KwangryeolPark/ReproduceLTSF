@@ -1,6 +1,17 @@
 *.pth
+metrics.npy
+x.npy
+corr.npy
+mspe.npy
+pred.npy
+rse.npy
+true.npy
+
+result*.txt
+
 .vscode
 test_results
+logs
 dataset/**
 !dataset/.gitkeep
 venv/

@@ -1,52 +1,43 @@
+import logging
+logging.basicConfig(format='%(asctime)s,%(msecs)03d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
+    datefmt='%Y-%m-%d:%H:%M:%S',
+    level=logging.INFO)
+
 from data_provider.data_factory import data_provider
 from exp.exp_basic import Exp_Basic
-from models import Fredformer
-from utils.tools import EarlyStopping, adjust_learning_rate, visual, test_params_flop
+from models import Informer, Autoformer, Transformer, Reformer
+from utils.tools import EarlyStopping, adjust_learning_rate, visual
 from utils.metrics import metric
 
 import numpy as np
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from torch import optim
-from torch.optim import lr_scheduler 
 
 import os
 import time
 
 import warnings
-import matplotlib.pyplot as plt
 import numpy as np
 
-from exp.ContrastiveLoss import SupConLoss,swavloss,NTXentLoss
-from exp.Regularization  import Regularization
-#from torchvision.models import densenet121
-from torchinfo import summary
-from thop import profile
-from thop import clever_format
+warnings.filterwarnings('ignore')
 
 
 class Exp_Main(Exp_Basic):
-    
     def __init__(self, args):
         super(Exp_Main, self).__init__(args)
 
     def _build_model(self):
         model_dict = {
-            'Fredformer': Fredformer,
+            'Autoformer': Autoformer,
+            'Transformer': Transformer,
+            'Informer': Informer,
+            'Reformer': Reformer,
         }
         model = model_dict[self.args.model].Model(self.args).float()
 
         if self.args.use_multi_gpu and self.args.use_gpu:
             model = nn.DataParallel(model, device_ids=self.args.device_ids)
-
-        #summary(model, input_size=(self.args.batch_size, 336, self.args.enc_in), device="cuda", verbose=2, depth=2)
-        inputs= torch.randn(self.args.batch_size, self.args.seq_len, self.args.enc_in)
-        flops, macs = profile(model, inputs=(inputs,), verbose=False)
-
-        flops, macs = clever_format([flops, macs], "%.3f")
-        print(f"FLOPS: {flops}, MACs: {macs}")
-
         return model
 
     def _get_data(self, flag):
@@ -59,55 +50,33 @@ class Exp_Main(Exp_Basic):
 
     def _select_criterion(self):
         criterion = nn.MSELoss()
-        criterion2 = NTXentLoss(self.device,self.args.batch_size,temperature=0.07,use_cosine_similarity=False)#self.args.enc_in
-        return criterion,criterion2
-    
-    def select_regularization(self):
-        self.weight_decay=self.args.cf_weight_decay 
-        if self.weight_decay>0:
-            self.reg_loss=Regularization(self.model, self.args.cf_weight_decay, self.args.cf_p).to(self.device)
+        return criterion
 
-    def vali(self, vali_data, vali_loader, criterion, criterion2):
-        total_loss = []
-        self.model.eval()
-        
-        with torch.no_grad():
-            for i, (batch_x, batch_y, batch_x_mark, batch_y_mark) in enumerate(vali_loader):
-                batch_x = batch_x.float().to(self.device)
-                batch_y = batch_y.float()
+    def _predict(self, batch_x, batch_y, batch_x_mark, batch_y_mark):
+        # decoder input
+        dec_inp = torch.zeros_like(batch_y[:, -self.args.pred_len:, :]).float()
+        dec_inp = torch.cat([batch_y[:, :self.args.label_len, :], dec_inp], dim=1).float().to(self.device)
+        # encoder - decoder
 
-                batch_x_mark = batch_x_mark.float().to(self.device)
-                batch_y_mark = batch_y_mark.float().to(self.device)
+        def _run_model():
+            outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)
+            if self.args.output_attention:
+                outputs = outputs[0]
+            return outputs
 
-                # decoder input
-                dec_inp = torch.zeros_like(batch_y[:, -self.args.pred_len:, :]).float()
-                dec_inp = torch.cat([batch_y[:, :self.args.label_len, :], dec_inp], dim=1).float().to(self.device)
-                self.select_regularization()
-                # encoder - decoder
-                if self.args.use_amp:
-                    with torch.cuda.amp.autocast():
-                        outputs = self.model(batch_x)
+        if self.args.use_amp:
+            with torch.cuda.amp.autocast():
+                outputs = _run_model()
+        else:
+            outputs = _run_model()
 
-                else:
-                    outputs = self.model(batch_x)
+        f_dim = -1 if self.args.features == 'MS' else 0
+        outputs = outputs[:, -self.args.pred_len:, f_dim:]
+        batch_y = batch_y[:, -self.args.pred_len:, f_dim:].to(self.device)
 
-                f_dim = -1 if self.args.features == 'MS' else 0
-                outputs = outputs[:, -self.args.pred_len:, f_dim:]
-                batch_y = batch_y[:, -self.args.pred_len:, f_dim:].to(self.device)
+        return outputs, batch_y
 
-                pred = outputs.detach().cpu()
-                true = batch_y.detach().cpu()
-                loss = criterion(pred, true)
-                if self.weight_decay > 0:
-                        loss = loss + 0.01 * self.reg_loss(self.model).detach().cpu()
-
-                total_loss.append(loss)
-
-        total_loss = np.average(total_loss)
-        self.model.train()
-        return total_loss
-    
-    def vali_t(self, vali_data, vali_loader, criterion):
+    def vali(self, vali_data, vali_loader, criterion):
         total_loss = []
         self.model.eval()
         with torch.no_grad():
@@ -118,32 +87,19 @@ class Exp_Main(Exp_Basic):
                 batch_x_mark = batch_x_mark.float().to(self.device)
                 batch_y_mark = batch_y_mark.float().to(self.device)
 
-                # decoder input
-                dec_inp = torch.zeros_like(batch_y[:, -self.args.pred_len:, :]).float()
-                dec_inp = torch.cat([batch_y[:, :self.args.label_len, :], dec_inp], dim=1).float().to(self.device)
-                # encoder - decoder
-                if self.args.use_amp:
-                    with torch.cuda.amp.autocast():
-                        outputs = self.model(batch_x)
-                else:
-                    outputs = self.model(batch_x)
- 
-                f_dim = -1 if self.args.features == 'MS' else 0
-                outputs = outputs[:, -self.args.pred_len:, f_dim:]
-                batch_y = batch_y[:, -self.args.pred_len:, f_dim:].to(self.device)
+                outputs, batch_y = self._predict(batch_x, batch_y, batch_x_mark, batch_y_mark)
 
                 pred = outputs.detach().cpu()
                 true = batch_y.detach().cpu()
 
                 loss = criterion(pred, true)
-                
+
                 total_loss.append(loss)
         total_loss = np.average(total_loss)
         self.model.train()
         return total_loss
 
-    def train(self, setting,args):
-        
+    def train(self, setting):
         train_data, train_loader = self._get_data(flag='train')
         vali_data, vali_loader = self._get_data(flag='val')
         test_data, test_loader = self._get_data(flag='test')
@@ -158,16 +114,10 @@ class Exp_Main(Exp_Basic):
         early_stopping = EarlyStopping(patience=self.args.patience, verbose=True)
 
         model_optim = self._select_optimizer()
-        criterion,criterion2 = self._select_criterion()
-        
+        criterion = self._select_criterion()
+
         if self.args.use_amp:
             scaler = torch.cuda.amp.GradScaler()
-            
-        scheduler = lr_scheduler.OneCycleLR(optimizer = model_optim,
-                                            steps_per_epoch = train_steps,
-                                            pct_start = self.args.pct_start,
-                                            epochs = self.args.train_epochs,
-                                            max_lr = self.args.learning_rate)
 
         for epoch in range(self.args.train_epochs):
             iter_count = 0
@@ -184,31 +134,10 @@ class Exp_Main(Exp_Basic):
                 batch_x_mark = batch_x_mark.float().to(self.device)
                 batch_y_mark = batch_y_mark.float().to(self.device)
 
-                # decoder input
-                dec_inp = torch.zeros_like(batch_y[:, -self.args.pred_len:, :]).float()
-                dec_inp = torch.cat([batch_y[:, :self.args.label_len, :], dec_inp], dim=1).float().to(self.device)
-                self.select_regularization()
-                # encoder - decoder
-                if self.args.use_amp:
-                    with torch.cuda.amp.autocast():
-                        outputs = self.model(batch_x)
+                outputs, batch_y = self._predict(batch_x, batch_y, batch_x_mark, batch_y_mark)
 
-                        f_dim = -1 if self.args.features == 'MS' else 0
-                        outputs = outputs[:, -self.args.pred_len:, f_dim:]
-                        batch_y = batch_y[:, -self.args.pred_len:, f_dim:].to(self.device)
-                        loss = criterion(outputs, batch_y)
-                        train_loss.append(loss.item())
-                else:
-                    outputs = self.model(batch_x)
-
-                    f_dim = -1 if self.args.features == 'MS' else 0
-                    outputs = outputs[:, -self.args.pred_len:, f_dim:]
-                    batch_y = batch_y[:, -self.args.pred_len:, f_dim:].to(self.device)
-                    loss = criterion(outputs, batch_y)
-                    
-                    if self.weight_decay > 0:
-                        loss = loss + 0.01 * self.reg_loss(self.model)
-                    train_loss.append(loss.item())
+                loss = criterion(outputs, batch_y)
+                train_loss.append(loss.item())
 
                 if (i + 1) % 100 == 0:
                     print("\titers: {0}, epoch: {1} | loss: {2:.7f}".format(i + 1, epoch + 1, loss.item()))
@@ -225,15 +154,12 @@ class Exp_Main(Exp_Basic):
                 else:
                     loss.backward()
                     model_optim.step()
-                    
-                if self.args.lradj == 'FT':
-                    adjust_learning_rate(model_optim, scheduler, epoch + 1, self.args, printout=False)
-                    scheduler.step()
 
             print("Epoch: {} cost time: {}".format(epoch + 1, time.time() - epoch_time))
             train_loss = np.average(train_loss)
-            vali_loss = self.vali(vali_data, vali_loader, criterion, criterion2)
-            test_loss = self.vali_t(test_data, test_loader, criterion)
+            vali_loss = self.vali(vali_data, vali_loader, criterion)
+            test_loss = self.vali(test_data, test_loader, criterion)
+
             print("Epoch: {0}, Steps: {1} | Train Loss: {2:.7f} Vali Loss: {3:.7f} Test Loss: {4:.7f}".format(
                 epoch + 1, train_steps, train_loss, vali_loss, test_loss))
             early_stopping(vali_loss, self.model, path)
@@ -241,26 +167,20 @@ class Exp_Main(Exp_Basic):
                 print("Early stopping")
                 break
 
-            if self.args.lradj != 'FT':
-                adjust_learning_rate(model_optim, scheduler, epoch + 1, self.args)
-            else:
-                print('Updating learning rate to {}'.format(scheduler.get_last_lr()[0]))
-
+            adjust_learning_rate(model_optim, epoch + 1, self.args)
 
         best_model_path = path + '/' + 'checkpoint.pth'
         self.model.load_state_dict(torch.load(best_model_path))
 
-        return self.model
+        return
 
-    def test(self, setting,args, test=0):
+    def test(self, setting, test=0):
         test_data, test_loader = self._get_data(flag='test')
-        
         if test:
             print('loading model')
             self.model.load_state_dict(torch.load(os.path.join('./checkpoints/' + setting, 'checkpoint.pth')))
 
         preds = []
-        
         trues = []
         inputx = []
         folder_path = './test_results/' + setting + '/'
@@ -277,26 +197,13 @@ class Exp_Main(Exp_Basic):
                 batch_x_mark = batch_x_mark.float().to(self.device)
                 batch_y_mark = batch_y_mark.float().to(self.device)
 
-                # decoder input
-                dec_inp = torch.zeros_like(batch_y[:, -self.args.pred_len:, :]).float()
-                dec_inp = torch.cat([batch_y[:, :self.args.label_len, :], dec_inp], dim=1).float().to(self.device)
-                # encoder - decoder
-                if self.args.use_amp:
-                    with torch.cuda.amp.autocast():
-                        outputs = self.model(batch_x)
-                else:
-                    outputs = self.model(batch_x)
+                outputs, batch_y = self._predict(batch_x, batch_y, batch_x_mark, batch_y_mark)
 
-                f_dim = -1 if self.args.features == 'MS' else 0
-                
-                outputs = outputs[:, -self.args.pred_len:, f_dim:]
-                
-                batch_y = batch_y[:, -self.args.pred_len:, f_dim:].to(self.device)
                 outputs = outputs.detach().cpu().numpy()
                 batch_y = batch_y.detach().cpu().numpy()
 
-                pred = outputs  
-                true = batch_y  
+                pred = outputs.detach().cpu().numpy()  # .squeeze()
+                true = batch_y.detach().cpu().numpy()  # .squeeze()
 
                 preds.append(pred)
                 trues.append(true)
@@ -320,17 +227,14 @@ class Exp_Main(Exp_Basic):
                         os.path.join(folder_path, f'{actual_index}.pdf')
                     )
 
-        if self.args.test_flop:
-            test_params_flop((batch_x.shape[1],batch_x.shape[2]))
-            exit()
-        preds = np.array(preds)
-        
-        trues = np.array(trues)
+        preds = np.concatenate(preds, axis=0)
         inputx = np.array(inputx)
-        preds = preds.reshape(-1, preds.shape[-2], preds.shape[-1])
-        
-        trues = trues.reshape(-1, trues.shape[-2], trues.shape[-1])
         inputx = inputx.reshape(-1, inputx.shape[-2], inputx.shape[-1])
+        trues = np.concatenate(trues, axis=0)
+        print('test shape:', preds.shape, trues.shape)
+        preds = preds.reshape(-1, preds.shape[-2], preds.shape[-1])
+        trues = trues.reshape(-1, trues.shape[-2], trues.shape[-1])
+        print('test shape:', preds.shape, trues.shape)
 
         # result save
         folder_path = './results/' + setting + '/'
@@ -339,13 +243,13 @@ class Exp_Main(Exp_Basic):
 
         mae, mse, rmse, mape, mspe, rse, corr = metric(preds, trues)
         print('mse:{}, mae:{}, rse:{}'.format(mse, mae, rse))
-        save_file = "result_" + str(args.data_path) +".txt"
-        f = open(save_file, 'a')
+        f = open("result.txt", 'a')
         f.write(setting + "  \n")
-        f.write('mse:{}, mae:{}, rse:{}'.format(mse, mae, rse))
+        f.write('mse:{}, mae:{}'.format(mse, mae))
         f.write('\n')
         f.write('\n')
         f.close()
+
 
         try:
             import pandas
@@ -391,6 +295,7 @@ class Exp_Main(Exp_Basic):
         if load:
             path = os.path.join(self.args.checkpoints, setting)
             best_model_path = path + '/' + 'checkpoint.pth'
+            logging.info(best_model_path)
             self.model.load_state_dict(torch.load(best_model_path))
 
         preds = []
@@ -403,15 +308,8 @@ class Exp_Main(Exp_Basic):
                 batch_x_mark = batch_x_mark.float().to(self.device)
                 batch_y_mark = batch_y_mark.float().to(self.device)
 
-                # decoder input
-                dec_inp = torch.zeros([batch_y.shape[0], self.args.pred_len, batch_y.shape[2]]).float().to(batch_y.device)
-                dec_inp = torch.cat([batch_y[:, :self.args.label_len, :], dec_inp], dim=1).float().to(self.device)
-                # encoder - decoder
-                if self.args.use_amp:
-                    with torch.cuda.amp.autocast():
-                        outputs = self.model(batch_x)
-                else:
-                    outputs = self.model(batch_x)
+                outputs, batch_y = self._predict(batch_x, batch_y, batch_x_mark, batch_y_mark)
+
                 pred = outputs.detach().cpu().numpy()  # .squeeze()
                 preds.append(pred)
 
@@ -421,7 +319,7 @@ class Exp_Main(Exp_Basic):
         # result save
         folder_path = './results/' + setting + '/'
         if not os.path.exists(folder_path):
-           os.makedirs(folder_path)
+            os.makedirs(folder_path)
 
         np.save(folder_path + 'real_prediction.npy', preds)
 
