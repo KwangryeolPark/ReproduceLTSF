@@ -4,12 +4,8 @@ if [ -d "./venv" ]; then
     source ./venv/bin/activate
 fi
 
-if [ ! -d "./logs" ]; then
-    mkdir ./logs
-fi
-
 if [ ! -d "./logs/LTSF" ]; then
-    mkdir ./logs/LTSF
+    mkdir -p ./logs/LTSF
 fi
 
 rate=0.001
