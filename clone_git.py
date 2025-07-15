@@ -93,4 +93,7 @@ readme_path = os.path.join(model_path, 'README.md')
 with open(readme_path, 'w') as f:
     f.write(f"# Important\n")
     f.write(f"* This repository is the clone version of {repo_dir}\n")
-    
+
+
+model_name = model_name.split('/')[-1]
+os.system(f'python copy_notebooks.py --repo_dir {model_name}')
