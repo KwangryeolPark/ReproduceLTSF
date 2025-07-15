@@ -29,14 +29,14 @@ learning_rate: 0.0001
 loss: mse
 lradj: type1
 model: Autoformer
-model_id: ETTh1_96_48
+model_id: ETTh1_96_24
 moving_avg: 25
 n_hashes: 4
 n_heads: 8
 num_workers: 10
 output_attention: false
 patience: 3
-pred_len: 48
+pred_len: 24
 random_seed: 2021
 root_path: ./dataset/ETT-small/
 seq_len: 96
