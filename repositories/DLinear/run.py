@@ -5,10 +5,6 @@ from exp.exp_main import Exp_Main
 import random
 import numpy as np
 
-fix_seed = 2021
-random.seed(fix_seed)
-torch.manual_seed(fix_seed)
-np.random.seed(fix_seed)
 
 parser = argparse.ArgumentParser(description='Autoformer & Transformer family for Time Series Forecasting')
 
@@ -79,8 +75,14 @@ parser.add_argument('--use_multi_gpu', action='store_true', help='use multiple g
 parser.add_argument('--devices', type=str, default='0,1,2,3', help='device ids of multile gpus')
 parser.add_argument('--test_flop', action='store_true', default=False, help='See utils/tools for usage')
 
+parser.add_argument('--overwrite', action='store_true', default=False, help='overwrite the saved model')
+parser.add_argument('--random_seed', type=int, default=2021, help='random seed for reproduction')
 args = parser.parse_args()
 
+fix_seed = args.random_seed
+random.seed(fix_seed)
+torch.manual_seed(fix_seed)
+np.random.seed(fix_seed)
 args.use_gpu = True if torch.cuda.is_available() and args.use_gpu else False
 
 if args.use_gpu and args.use_multi_gpu:
@@ -114,7 +116,12 @@ if args.is_training:
             args.embed,
             args.distil,
             args.des, ii)
-
+        if os.path.exists(os.path.join('results', setting)):
+            if args.overwrite:
+                print(f"Overwriting existing results for {setting}.")
+            else:
+                print(f"Results for {setting} already exist. Skipping training.")
+                continue
         exp = Exp(args)  # set experiments
         print('>>>>>>>start training : {}>>>>>>>>>>>>>>>>>>>>>>>>>>'.format(setting))
         exp.train(setting)
