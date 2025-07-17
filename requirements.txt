@@ -14,3 +14,4 @@ pyyaml
 openpyxl
 torchinfo
 thop
+notebook
