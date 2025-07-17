@@ -12,8 +12,8 @@ seq_len=336
 model_name=DLinear
 
 root_path_name=./dataset/
-data_path_name=traffic.csv
-model_id_name=Traffic
+data_path_name=weather.csv
+model_id_name=Weather
 data_name=custom
 
 random_seed=2021
@@ -31,11 +31,10 @@ do
       --features M \
       --seq_len $seq_len \
       --pred_len $pred_len \
-      --enc_in 862 \
+      --enc_in 21 \
       --des 'Exp' \
       --itr 1 \
       --batch_size 16 \
-      --learning_rate 0.05 \
       $@ \
       > >(tee logs/LTSF/${model_name}_${model_id_name}_${seq_len}_${pred_len}.log)  # This will log to both console and file
 done
